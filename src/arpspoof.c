@@ -45,7 +45,7 @@ extern int errno;
 
 void usage(void);
 void log_error(int level, const char *fmt, ...);
-void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
+void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
     u_int8_t* dst_mac, u_int8_t* dst_ip);
 void start_spoof(int send_interval, const char* intf, const char* ip,
     struct libnet_ether_addr* pmac);
@@ -131,21 +131,21 @@ int main(int argc, char *argv[])
                 "can't find MAC address for localhost\n");
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, 6);
   } else if (!get_mac_by_ip(red_ip, &red_mac))
-    log_error(LOG_FATAL, "can't find MAC address for %s\n", target_ip_str);
+    log_error(LOG_FATAL, "can't find MAC address for %s\n", redirect_ip_str);
 
   if (optind == argc)
     log_error(LOG_FATAL, "must specified host IP address\n");
   spoof_ip_str = argv[optind];
   spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE);
 
-  build_packet((u_int8_t*)&red_mac, (u_int8_t*)&spf_ip,
+  build_packet(ARPOP_REPLY, (u_int8_t*)&red_mac, (u_int8_t*)&spf_ip,
                (u_int8_t*)&tgt_mac, (u_int8_t*)&tgt_ip);
 
   start_spoof(send_interval, intf, spoof_ip_str, &red_mac);
   return 0;
 }
 
-void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
+void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
     u_int8_t* dst_mac, u_int8_t* dst_ip) {
 
   libnet_ptag_t p_tag;
@@ -155,7 +155,7 @@ void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
       ETHERTYPE_IP,              /* protocol type */
       ETHER_ADDR_LEN,            /* mac length */
       IP_ADDR_LEN,               /* protocol length */
-      ARPOP_REPLY,               /* op type */
+      op,                        /* op type */
       src_mac,                   /* source mac addr */
       src_ip,                    /* source ip addr */
       dst_mac,                   /* dest mac addr */
@@ -231,7 +231,20 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
     /* force the kernel to arp.*/
     arp_force(ip);
 #else
-    arp_send(llif, intf, ARPOP_REQUEST, NULL, 0, NULL, ip);
+    //arp_send(llif, intf, ARPOP_REQUEST, NULL, 0, NULL, ip);
+    /* get ip */
+    in_addr_t local_ip = libnet_get_ipaddr4(lnc);
+
+    /* get mac */
+    struct libnet_ether_addr* local_mac = libnet_get_hwaddr(lnc);
+    if (local_mac == NULL)
+      log_error(LOG_FATAL | LOG_LIBNET,
+                "can't find MAC address for localhost\n");
+    build_packet(ARPOP_REQUEST, (u_int8_t*)local_mac, (u_int8_t*)&local_ip,
+                 (u_int8_t*)"\xff\xf\xff\xff\xff\xff", (u_int8_t*)&ip);
+    if(libnet_write(lnc) == -1) {
+      log_error(LOG_LIBNET, "can't send packet\n");
+    }
 #endif
     sleep(1);
   }
