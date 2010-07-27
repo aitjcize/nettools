@@ -17,6 +17,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * *Note*
+ * The function arp_cache_lookup and get_mac_by_ip is part of the project
+ * `dsniff'.
  */
 
 #include <errno.h>
@@ -119,7 +123,8 @@ int main(int argc, char *argv[])
   if (!red_ip) {
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
-      log_error(LOG_FATAL, "can't find MAC address for localhost\n");
+      log_error(LOG_FATAL, "can't find MAC address for localhost"
+                           " (are you root?)\n");
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, 6);
   } else if (!get_mac_by_ip(red_ip, &red_mac))
     log_error(LOG_FATAL, "can't find MAC address for %s\n", target_ip_str);
@@ -249,14 +254,15 @@ int arp_force(in_addr_t dst)
 #endif
 
 void log_error(int level, const char *fmt, ...) {
-  //int err = errno;
   va_list vap;
+
   if ((level & LOG_LIBNET) == LOG_LIBNET) {
     char* tmp = libnet_geterror(lnc);
     if (tmp)
       fprintf(stderr, "%s: %s\n", program_name, tmp);
   }
 
+  fprintf(stderr, "%s: ", program_name);
   va_start(vap, fmt);
   vfprintf(stderr, fmt, vap);
   va_end(vap);
@@ -266,5 +272,6 @@ void log_error(int level, const char *fmt, ...) {
 }
 
 void usage(void) {
-
+  fprintf(stderr, "Usage: %s [-i interface] [-t target IP] [-r redirect IP]"
+                  " host\n", program_name);
 }
