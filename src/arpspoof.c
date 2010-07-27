@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
   if (!red_ip) {
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
-      log_error(LOG_FATAL | LOG_LIBNET, "can't find MAC address for localhost"
-                           " (are you root?)\n");
+      log_error(LOG_FATAL | LOG_LIBNET,
+                "can't find MAC address for localhost\n");
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, 6);
   } else if (!get_mac_by_ip(red_ip, &red_mac))
     log_error(LOG_FATAL, "can't find MAC address for %s\n", target_ip_str);
