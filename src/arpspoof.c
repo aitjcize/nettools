@@ -19,15 +19,18 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * *Note*
- * The function arp_cache_lookup and get_mac_by_ip is part of the project
- * `dsniff'.
+ * The function `arp_cache_lookup', `arp_force' and `get_mac_by_ip' is part
+ * of the project `dsniff'.
+ *
  */
 
 #include <errno.h>
 #include <getopt.h>
 #include <libnet.h>
 #include <net/if_arp.h>
+#include <netinet/ether.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -44,7 +47,8 @@ void usage(void);
 void log_error(int level, const char *fmt, ...);
 void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
     u_int8_t* dst_mac, u_int8_t* dst_ip);
-void start_spoof(int send_interval);
+void start_spoof(int send_interval, const char* intf, const char* ip,
+    struct libnet_ether_addr* pmac);
 int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac);
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac);
 int arp_force(in_addr_t dst);
@@ -123,7 +127,7 @@ int main(int argc, char *argv[])
   if (!red_ip) {
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
-      log_error(LOG_FATAL, "can't find MAC address for localhost"
+      log_error(LOG_FATAL | LOG_LIBNET, "can't find MAC address for localhost"
                            " (are you root?)\n");
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, 6);
   } else if (!get_mac_by_ip(red_ip, &red_mac))
@@ -137,7 +141,7 @@ int main(int argc, char *argv[])
   build_packet((u_int8_t*)&red_mac, (u_int8_t*)&spf_ip,
                (u_int8_t*)&tgt_mac, (u_int8_t*)&tgt_ip);
 
-  start_spoof(send_interval);
+  start_spoof(send_interval, intf, spoof_ip_str, &red_mac);
   return 0;
 }
 
@@ -146,20 +150,20 @@ void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
 
   libnet_ptag_t p_tag;
 
-  p_tag = libnet_build_arp(  /* construct arp packet */
-      ARPHRD_ETHER,          /* hardware type ethernet */
-      ETHERTYPE_IP,          /* protocol type */
-      ETHER_ADDR_LEN,        /* mac length */
-      IP_ADDR_LEN,           /* protocol length */
-      ARPOP_REPLY,           /* op type */
-      src_mac,               /* source mac addr */
-      src_ip,                /* source ip addr */
-      dst_mac,               /* dest mac addr */
-      dst_ip,                /* dest ip addr */
-      NULL,                  /* payload */
-      0,                     /* payload length */
-      lnc,                   /* libnet context */
-      0                      /* 0 stands to build a new one */
+  p_tag = libnet_build_arp(      /* construct arp packet */
+      ARPHRD_ETHER,              /* hardware type ethernet */
+      ETHERTYPE_IP,              /* protocol type */
+      ETHER_ADDR_LEN,            /* mac length */
+      IP_ADDR_LEN,               /* protocol length */
+      ARPOP_REPLY,               /* op type */
+      src_mac,                   /* source mac addr */
+      src_ip,                    /* source ip addr */
+      dst_mac,                   /* dest mac addr */
+      dst_ip,                    /* dest ip addr */
+      NULL,                      /* payload */
+      0,                         /* payload length */
+      lnc,                       /* libnet context */
+      0                          /* 0 stands to build a new one */
   );
 
   if(-1 == p_tag)
@@ -179,11 +183,15 @@ void build_packet(u_int8_t* src_mac, u_int8_t* src_ip,
     log_error(LOG_FATAL, "can't build ethernet header\n");
 }
 
-void start_spoof(int send_interval) {
+void start_spoof(int send_interval, const char* intf, const char* ip,
+    struct libnet_ether_addr* pmac) {
+  int size = 0;
   while (1) {
-    if(-1 == libnet_write(lnc)) {
+    if((size = libnet_write(lnc)) == -1) {
       log_error(LOG_LIBNET, "can't send packet\n");
     }
+    printf("%s: sending %d bytes: %s is at %s\n", intf, size, ip,
+        ether_ntoa((struct ether_addr*)pmac));
     usleep(send_interval);
   }
 }
@@ -258,7 +266,7 @@ void log_error(int level, const char *fmt, ...) {
 
   if ((level & LOG_LIBNET) == LOG_LIBNET) {
     char* tmp = libnet_geterror(lnc);
-    if (tmp)
+    if (tmp && strlen(tmp) != 0)
       fprintf(stderr, "%s: %s\n", program_name, tmp);
   }
 
