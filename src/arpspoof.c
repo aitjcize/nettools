@@ -47,8 +47,7 @@ void usage(void);
 void log_error(int level, const char *fmt, ...);
 void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
     u_int8_t* dst_mac, u_int8_t* dst_ip);
-void start_spoof(int send_interval, const char* intf, const char* ip,
-    struct libnet_ether_addr* pmac);
+void start_spoof(int send_interval, const char* intf);
 int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac);
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac);
 int arp_force(in_addr_t dst);
@@ -66,6 +65,13 @@ static struct option longopts[] = {
 };
 
 libnet_t* lnc = 0;
+char* target_ip_str = NULL;            /* IP which packets is send to */
+char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
+char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
+                                          packets to, if not specified,
+                                          attacker's MAC is used */
+in_addr_t tgt_ip = 0, red_ip = 0, spf_ip = 0;
+struct libnet_ether_addr tgt_mac, red_mac;
 
 int main(int argc, char *argv[])
 {
@@ -73,13 +79,6 @@ int main(int argc, char *argv[])
   int opt = 0;
   int send_interval = 1000000;           /* send interval in usecond */
   char* intf = NULL;                     /* interface */
-  char* target_ip_str = NULL;            /* IP which packets is send to */
-  char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
-  char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
-                                            packets to, if not specified,
-                                            attacker's MAC is used */
-  in_addr_t tgt_ip = 0, red_ip = 0, spf_ip = 0;
-  struct libnet_ether_addr tgt_mac, red_mac;
 
   while ((opt = getopt_long(argc, argv, "i:n:t:r:hv", longopts, NULL)) != -1) {
     switch(opt) {
@@ -141,7 +140,7 @@ int main(int argc, char *argv[])
   build_packet(ARPOP_REPLY, (u_int8_t*)&red_mac, (u_int8_t*)&spf_ip,
                (u_int8_t*)&tgt_mac, (u_int8_t*)&tgt_ip);
 
-  start_spoof(send_interval, intf, spoof_ip_str, &red_mac);
+  start_spoof(send_interval, intf);
   return 0;
 }
 
@@ -183,15 +182,18 @@ void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
     log_error(LOG_FATAL, "can't build ethernet header\n");
 }
 
-void start_spoof(int send_interval, const char* intf, const char* ip,
-    struct libnet_ether_addr* pmac) {
+void start_spoof(int send_interval, const char* intf) {
   int size = 0;
   while (1) {
     if((size = libnet_write(lnc)) == -1) {
       log_error(LOG_LIBNET, "can't send packet\n");
     }
-    printf("%s: sending %d bytes: %s is at %s\n", intf, size, ip,
-        ether_ntoa((struct ether_addr*)pmac));
+    if (target_ip_str)
+      printf("%s: %d bytes, target: %s: %s is at %s\n", intf, size, 
+        target_ip_str, spoof_ip_str, ether_ntoa((struct ether_addr*)&red_mac));
+    else
+      printf("%s: %d bytes, target: broadcasting: %s is at %s\n", intf, size, 
+        spoof_ip_str, ether_ntoa((struct ether_addr*)&red_mac));
     usleep(send_interval);
   }
 }
@@ -231,7 +233,6 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
     /* force the kernel to arp.*/
     arp_force(ip);
 #else
-    //arp_send(llif, intf, ARPOP_REQUEST, NULL, 0, NULL, ip);
     /* get ip */
     in_addr_t local_ip = libnet_get_ipaddr4(lnc);
 
