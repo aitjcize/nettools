@@ -103,8 +103,14 @@ int main(int argc, char *argv[])
     }
   }
 
+  /* check if use is root */
+  if (getuid() && geteuid()) {
+    fprintf(stderr, "%s: must run as root\n", program_name);
+    exit(1);
+  }
+
   if (!intf) {
-    fprintf(stderr, "arpspoof: must specify interface\n");
+    fprintf(stderr, "%s: must specify interface\n", program_name);
     exit(1);
   }
 
@@ -115,9 +121,9 @@ int main(int argc, char *argv[])
   if (target_ip_str)
     tgt_ip = libnet_name2addr4(lnc, target_ip_str, LIBNET_RESOLVE);
   if (!tgt_ip)
-    memcpy(tgt_mac.ether_addr_octet, "\xff\xff\xff\xff\xff\xff", 6);
+    memcpy(tgt_mac.ether_addr_octet,"\xff\xff\xff\xff\xff\xff",ETHER_ADDR_LEN);
   else if (!get_mac_by_ip(tgt_ip, &tgt_mac))
-    log_error(LOG_FATAL | LOG_LIBNET, "can't find MAC address for %s\n",
+    log_error(LOG_FATAL | LOG_LIBNET, "can't resolve MAC address for %s\n",
               target_ip_str);
 
   /* If redirect IP not specified, packets are redirect to the attacker */
@@ -127,10 +133,10 @@ int main(int argc, char *argv[])
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
       log_error(LOG_FATAL | LOG_LIBNET,
-                "can't find MAC address for localhost\n");
-    memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, 6);
+                "can't resolve MAC address for localhost\n");
+    memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, ETHER_ADDR_LEN);
   } else if (!get_mac_by_ip(red_ip, &red_mac))
-    log_error(LOG_FATAL, "can't find MAC address for %s\n", redirect_ip_str);
+    log_error(LOG_FATAL, "can't resolve MAC address for %s\n",redirect_ip_str);
 
   if (optind == argc)
     log_error(LOG_FATAL, "must specified host IP address\n");
@@ -141,6 +147,9 @@ int main(int argc, char *argv[])
                (u_int8_t*)&tgt_ip, (u_int8_t*)&tgt_mac);
 
   start_spoof(send_interval);
+
+  libnet_destroy(lnc);
+
   return 0;
 }
 
@@ -165,7 +174,7 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
       0                          /* 0 stands to build a new one */
   );
 
-  if(-1 == p_tag)
+  if (-1 == p_tag)
     log_error(LOG_FATAL | LOG_LIBNET, "can't build arp header\n");
 
   if (op == ARPOP_REQUEST)
@@ -181,14 +190,14 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
       0                          /* 0 to build a new one */
   );
 
-  if(-1 == p_tag)
+  if (-1 == p_tag)
     log_error(LOG_FATAL | LOG_LIBNET, "can't build ethernet header\n");
 }
 
 void start_spoof(int send_interval) {
   int size = 0;
   while (1) {
-    if((size = libnet_write(lnc)) == -1) {
+    if (-1 == (size = libnet_write(lnc))) {
       log_error(LOG_LIBNET | LOG_LIBNET, "can't send packet\n");
     }
     if (target_ip_str)
@@ -216,9 +225,9 @@ int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac) {
   sin->sin_family = AF_INET;
   sin->sin_addr.s_addr = ip;
 
-  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+  if (-1 == (sock = socket(AF_INET, SOCK_DGRAM, 0)))
     return -1;
-  if (ioctl(sock, SIOCGARP, (caddr_t)&ar) == -1) {
+  if (-1 == ioctl(sock, SIOCGARP, (caddr_t)&ar)) {
     close(sock);
     return -1;
   }
@@ -230,10 +239,27 @@ int arp_cache_lookup(in_addr_t ip, struct libnet_ether_addr *mac) {
 int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
   int i = 0;
   do {
-    if (arp_cache_lookup(ip, mac) == 0)
-      return 1;
+    if (arp_cache_lookup(ip, mac) == 0) {
 #ifdef __linux__
-    /* force the kernel to arp.*/
+      /* arp_cache_lookup only determines if there is an entry in ARP cache, we
+       * also need no see if the MAC is valid.
+       * Linux kernel send an ARP request and add a new row in the ARP cache.
+       * If we do not get an ARP reply(target is down?), the MAC address in
+       * ARP cache will be 00:00:00:00:00:00.*/
+      if (memcmp((char*)mac, "\x00\x00\x00\x00\x00\x00", ETHER_ADDR_LEN) != 0)
+        return 1;
+      else
+        return 0;
+#else
+      return 1;
+#endif
+    }
+
+#ifdef __linux__
+    /* since linux does not accept unsolicited ARP replies, we can not get the
+     * mac address by sending an ARP request. Instead we use arp_force to send
+     * arbitrirary data. In order to send data to the target, kernel will
+     * update ARP cache and we can get the target MAC address.*/
     arp_force(ip);
 #else
     /* get ip */
@@ -243,10 +269,10 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
     struct libnet_ether_addr* local_mac = libnet_get_hwaddr(lnc);
     if (local_mac == NULL)
       log_error(LOG_FATAL | LOG_LIBNET,
-                "can't find MAC address for localhost\n");
+                "can't resolve MAC address for localhost\n");
     build_packet(ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
                  (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
-    if(libnet_write(lnc) == -1) {
+    if (-1 == libnet_write(lnc)) {
       log_error(LOG_FATAL | LOG_LIBNET, "can't send packet\n");
     }
 #endif
