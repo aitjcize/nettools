@@ -218,21 +218,21 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
 }
 
 void start_spoof(int send_interval) {
-  int c = 0;
+  int size = 0, c = 0;
 
   slog(LOG_INFO, "start sending packets\n");
   while (1) {
-    if (-1 == libnet_write(lnc)) {
+    if (-1 == (size = libnet_write(lnc))) {
       slog(LOG_LIBNET, "can't send packet\n");
     }
     if (tgt_ip != 0) {
-      printf("%s: 42 bytes, target: %s: %s is at ", intf,
+      printf("%s: %d bytes, target: %s: %s is at ", intf, size,
         libnet_addr2name4(tgt_ip, LIBNET_DONT_RESOLVE),
         libnet_addr2name4(spf_ip, LIBNET_DONT_RESOLVE));
       for (c = 0; c < 6; c++)
         printf("%.2x%c", ((u_char*)&red_mac)[c], (c < 5)? ':': '\n');
     } else {
-      printf("%s: 42 bytes, target: broadcasting: %s is at ", intf,
+      printf("%s: %d bytes, target: broadcasting: %s is at ", intf, size,
         libnet_addr2name4(spf_ip, LIBNET_DONT_RESOLVE));
       for (c = 0; c < 6; c++)
         printf("%.2x%c", ((u_char*)&red_mac)[c], (c < 5)? ':': '\n');
@@ -255,9 +255,10 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
   build_packet(ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
                (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
 
-    printf("%s: 42 bytes, broadcasting: Who has %s? Tell %s\n", intf,
-        libnet_addr2name4(ip, LIBNET_DONT_RESOLVE),
-        libnet_addr2name4(local_ip, LIBNET_DONT_RESOLVE));
+  printf("%s: 42 bytes, broadcasting: Who has %s? Tell %s\n", intf,
+      libnet_addr2name4(ip, LIBNET_DONT_RESOLVE),
+      libnet_addr2name4(local_ip, LIBNET_DONT_RESOLVE));
+
   do {
     /* send arp request */
     if (-1 == libnet_write(lnc))
@@ -267,16 +268,13 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
     *mac->ether_addr_octet = 0;
     pcap_dispatch(pcc, 1, arp_packet_handler_cb, (u_char*) &imp);
     if (imp.complete) {
-      int c = 0;
-      printf("%s: 42 bytes, received: %s is at ", intf,
-          libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
-      for (c = 0; c < 6; c++)
-        printf("%.2x%c", ((u_char*)(imp.mac))[c], (c < 5)? ':': '\n');
+      libnet_clear_packet(lnc);
       return 1;
     }
     usleep(100000);
-  }
-  while (++i < 30); /* try for 3 seconds */
+  } while (++i < 30); /* try for 3 seconds */
+
+  libnet_clear_packet(lnc);
   return 0;
 }
 
@@ -296,6 +294,12 @@ void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
     if (memcmp(&ip, ((ip_mac_pair*)imp)->ip, IP_ADDR_LEN) == 0) {
       memcpy(((ip_mac_pair*)imp)->mac, h_eth->_802_3_shost, ETHER_ADDR_LEN);
       ((ip_mac_pair*)imp)->complete = 1;
+      int c = 0;
+      printf("%s: %d bytes, received: %s is at ", intf, pkinfo->len,
+          libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
+      for (c = 0; c < 6; c++)
+        printf("%.2x%c", ((u_char*)((ip_mac_pair*)imp)->mac)[c],
+               (c < 5)? ':': '\n');
       return;
     }
   }
