@@ -28,8 +28,6 @@
 #include <pcap.h>
 #include <signal.h>
 #include <stdio.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 #define IP_ADDR_LEN 4
@@ -56,10 +54,14 @@ static struct option longopts[] = {
   { "interval" ,  required_argument, NULL, 'n' },
   { "target",     required_argument, NULL, 't' },
   { "redirect",   required_argument, NULL, 'r' },
+  { "verbose",    no_argument,       NULL, 'v' },
   { "help",       no_argument,       NULL, 'h' },
-  { "version",    no_argument,       NULL, 'v' }
 };
 
+/* flags */
+int verbose_mode = 0;
+
+/* global variables */
 libnet_t* lnc = 0;
 pcap_t* pcc = 0;
 in_addr_t tgt_ip = 0, red_ip = 0, spf_ip = 0;
@@ -79,7 +81,7 @@ int main(int argc, char *argv[])
   struct bpf_program bp;
   int opt = 0;
   int send_interval = 1000000;           /* send interval in usecond */
-  char* target_ip_str = NULL;            /* IP which packets is send to */
+  char* target_ip_str = NULL;            /* IP which packets is sent to */
   char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
   char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
                                             packets to, if not specified,
@@ -99,12 +101,15 @@ int main(int argc, char *argv[])
       case 'r':
         redirect_ip_str = optarg;
         break;
+      case 'v':
+        verbose_mode = 1;
+        break;
       case 'h':
         usage();
         exit(0);
-      case 'v':
-        printf("Version: %s\n", program_version);
-        exit(0);
+      default:
+        usage();
+        exit(1);
     }
   }
 
@@ -121,10 +126,12 @@ int main(int argc, char *argv[])
 
   /* libnet init */
   lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
+  slog(LOG_INFO, "libnet_init()\n");
 
   /* pcap init */
   if (!(pcc = pcap_open_live(intf, 100, 0, 10, err_buf)))
-    slog(LOG_PCAP, "pcap_init_live() error\n");
+    slog(LOG_PCAP, "pcap_open_live() error\n");
+  slog(LOG_INFO, "pcap_open_live()\n");
 
   /* set capture filter */
   if (-1 == pcap_compile(pcc, &bp, "arp", 0, -1))
@@ -149,6 +156,7 @@ int main(int argc, char *argv[])
     if (!get_mac_by_ip(red_ip, &red_mac))
       slog(LOG_FATAL, "can't resolve MAC address for %s\n",redirect_ip_str);
   } else {
+    slog(LOG_INFO, "redirect IP not specified, using localhost\n");
     struct libnet_ether_addr* ptmp = libnet_get_hwaddr(lnc);
     if (ptmp == NULL)
       slog(LOG_LIBNET, "can't resolve MAC address for localhost\n");
@@ -164,8 +172,6 @@ int main(int argc, char *argv[])
                (u_int8_t*)&tgt_ip, (u_int8_t*)&tgt_mac);
 
   start_spoof(send_interval);
-
-  libnet_destroy(lnc);
 
   return 0;
 }
@@ -213,6 +219,8 @@ void build_packet(int op, u_int8_t* src_ip, u_int8_t* src_mac,
 
 void start_spoof(int send_interval) {
   int c = 0;
+
+  slog(LOG_INFO, "start sending packets\n");
   while (1) {
     if (-1 == libnet_write(lnc)) {
       slog(LOG_LIBNET, "can't send packet\n");
@@ -237,6 +245,8 @@ int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
   int i = 0;
   ip_mac_pair imp = {0, &ip, mac};
 
+  slog(LOG_INFO, "resolving MAC address for %s\n",
+       libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
   in_addr_t local_ip = libnet_get_ipaddr4(lnc);
   struct libnet_ether_addr* local_mac = libnet_get_hwaddr(lnc);
 
@@ -294,6 +304,9 @@ void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
 void slog(int level, const char *fmt, ...) {
   va_list vap;
 
+  if ((level & LOG_INFO) == LOG_INFO && !verbose_mode)
+    return;
+
   if ((level & LOG_LIBNET) == LOG_LIBNET) {
     char* tmp = libnet_geterror(lnc);
     if (tmp && strlen(tmp) != 0)
@@ -314,8 +327,23 @@ void slog(int level, const char *fmt, ...) {
   if ((level & LOG_INFO) != LOG_INFO)
     exit(1);
 }
+  //int send_interval = 1000000;           /* send interval in usecond */
+  //char* target_ip_str = NULL;            /* IP which packets is send to */
+  //char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
+  //char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
+  //                                          packets to, if not specified,
+  //                                          attacker's MAC is used */
 
 void usage(void) {
-  fprintf(stderr, "Usage: %s [-i interface] [-t target IP] [-r redirect IP]"
-                  " host\n", program_name);
+  fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
+      program_name, program_version);
+  fprintf(stderr, "Usage: %s [-v|--verbose] [-i interface] [-t target] "
+          "[-r redirect] host\n\n", program_name);
+  fprintf(stderr,
+"  -i, --interface   interface\n"
+"  -t, --target      target IP, IP which ARP reply packets is sent to\n"
+"  -r, --redifect    redirect IP, IP which we want to redirect packet to, if\n"
+"                    not spefified, local MAC is used\n"
+"  -v, --vebose      verbose mode\n"
+"  host              the host you wish to intercept packets for\n");
 }
