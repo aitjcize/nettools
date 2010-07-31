@@ -331,12 +331,6 @@ void slog(int level, const char *fmt, ...) {
   if ((level & LOG_INFO) != LOG_INFO)
     exit(1);
 }
-  //int send_interval = 1000000;           /* send interval in usecond */
-  //char* target_ip_str = NULL;            /* IP which packets is send to */
-  //char* spoof_ip_str = NULL;             /* IP we want to intercept packets */
-  //char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
-  //                                          packets to, if not specified,
-  //                                          attacker's MAC is used */
 
 void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
