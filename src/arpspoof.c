@@ -47,7 +47,7 @@ void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
                                  const u_char* packet);
 
 const char* program_name = "arpspoof";
-const char* program_version = "0.1";
+const char* program_version = "0.2";
 
 static struct option longopts[] = {
   { "interface",  required_argument, NULL, 'i' },
@@ -124,6 +124,9 @@ int main(int argc, char *argv[])
     exit(1);
   }
 
+  if (optind == argc)
+    slog(LOG_FATAL, "must specified host IP address\n");
+
   /* libnet init */
   lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
   slog(LOG_INFO, "libnet_init()\n");
@@ -163,8 +166,6 @@ int main(int argc, char *argv[])
     memcpy(red_mac.ether_addr_octet, ptmp->ether_addr_octet, ETHER_ADDR_LEN);
   }
 
-  if (optind == argc)
-    slog(LOG_FATAL, "must specified host IP address\n");
   spoof_ip_str = argv[optind];
   spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE);
 
