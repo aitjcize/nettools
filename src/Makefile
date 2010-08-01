@@ -2,7 +2,7 @@ CFLAGS = -Wall -O2
 DBFLAGS = -g
 LIBS = -lnet -lpcap
 
-all: arpspoof synclood
+all: arpspoof synflood
 
 arpspoof: arpspoof.c
 	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS)
