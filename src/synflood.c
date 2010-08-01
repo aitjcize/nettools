@@ -410,8 +410,9 @@ void slog(int level, const char *fmt, ...) {
 void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
       program_name, program_version);
-  fprintf(stderr, "Usage: %s [-v] [-i interface] [-t target] [-r redirect]\n"
-                  "          [-m mac] [-M IP] target\n\n", program_name);
+  fprintf(stderr, "Usage: %s [-v] [-i interface] [-t target] [-r redirect] "
+                  "[-m mac] [-M IP]                  target\n\n",
+                  program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
 "  -t, --target      target IP, IP which ARP reply packets is sent to\n"
