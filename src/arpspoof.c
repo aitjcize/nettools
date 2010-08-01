@@ -128,8 +128,10 @@ int main(int argc, char *argv[])
     slog(LOG_FATAL, "must specified host IP address\n");
 
   /* libnet init */
-  lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
-  slog(LOG_INFO, "libnet_init()\n");
+  if (!(lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf)))
+    slog(LOG_FATAL, "libnet_init(): %s\n", libnet_geterror(lnc));
+  else
+    slog(LOG_INFO, "libnet_init()\n");
 
   /* pcap init */
   if (!(pcc = pcap_open_live(intf, 100, 0, 10, err_buf)))
@@ -167,7 +169,8 @@ int main(int argc, char *argv[])
   }
 
   spoof_ip_str = argv[optind];
-  spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE);
+  if (-1 == (spf_ip = libnet_name2addr4(lnc, spoof_ip_str, LIBNET_RESOLVE)))
+    slog(LOG_LIBNET, "invalid host IP address\n");
 
   build_packet(ARPOP_REPLY, (u_int8_t*)&spf_ip, (u_int8_t*)&red_mac,
                (u_int8_t*)&tgt_ip, (u_int8_t*)&tgt_mac);

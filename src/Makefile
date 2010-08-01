@@ -1,14 +1,22 @@
 CFLAGS = -Wall -O2
 DBFLAGS = -g
 LIBS = -lnet -lpcap
-TARGET = arpspoof
+
+all: arpspoof synclood
 
 arpspoof: arpspoof.c
-	$(CC) arpspoof.c -o $(TARGET) $(LIBS) $(CFLAGS)
-	strip $(TARGET)
+	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS)
+	strip arpspoof
 
-debug:
-	$(CC) arpspoof.c -o $(TARGET) $(LIBS) $(CFLAGS) $(DBFLAGS)
+arpspoof_debug:
+	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS) $(DBFLAGS)
+
+synflood: synflood.c
+	$(CC) synflood.c -o synflood $(LIBS) $(CFLAGS)
+	strip synflood
+
+synflood_debug:
+	$(CC) synflood.c -o synflood $(LIBS) $(CFLAGS) $(DBFLAGS)
 
 clean:
-	rm $(TARGET)
+	rm arpspoof synflood 
