@@ -1,8 +1,12 @@
 CFLAGS = -Wall -O2
 DBFLAGS = -g
 LIBS = -lnet -lpcap
+TARGETS = arpspoof synflood
 
-all: arpspoof synflood
+all: $(TARGETS)
+
+install:
+	mv $(TARGETS) /usr/sbin
 
 arpspoof: arpspoof.c
 	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS)
