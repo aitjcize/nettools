@@ -5,22 +5,28 @@ TARGETS = arpspoof synflood
 
 all: $(TARGETS)
 
-install:
-	mv $(TARGETS) /usr/sbin
-
-arpspoof: arpspoof.c
-	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS)
+arpspoof: arpspoof.o utils.o arp_utils.o
+	$(CC) arpspoof.o utils.o arp_utils.o -o arpspoof $(LIBS) $(CFLAGS)
 	strip arpspoof
 
-arpspoof_debug:
-	$(CC) arpspoof.c -o arpspoof $(LIBS) $(CFLAGS) $(DBFLAGS)
-
-synflood: synflood.c
-	$(CC) synflood.c -o synflood $(LIBS) $(CFLAGS)
+synflood: synflood.o utils.o arp_utils.o
+	$(CC) synflood.o utils.o arp_utils.o -o synflood $(LIBS) $(CFLAGS)
 	strip synflood
 
-synflood_debug:
-	$(CC) synflood.c -o synflood $(LIBS) $(CFLAGS) $(DBFLAGS)
+arpspoof.o: arpspoof.c
+	$(CC) -c arpspoof.c $(CFLAGS)
+
+synflood.o: synflood.c
+	$(CC) -c synflood.c $(CFLAGS)
+
+utils.o: utils.c
+	$(CC) -c utils.c $(CFLAGS)
+
+arp_utils.o: arp_utils.c
+	$(CC) -c arp_utils.c $(CFLAGS)
+
+install:
+	cp $(TARGETS) /usr/sbin
 
 clean:
-	rm arpspoof synflood 
+	rm arpspoof synflood arpspoof.o synflood.o utils.o arp_utils.o
