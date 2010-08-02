@@ -415,9 +415,9 @@ void usage(void) {
                   program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
-"  -t, --target      target IP, IP which ARP reply packets is sent to\n"
 "  -m, --mac         use alternate MAC (for LAN only)\n"
 "  -M, --mac-of-ip   use alternate MAC of the ip IP (for LAN only)\n"
 "  -v, --vebose      verbose mode\n"
+"  -h, --help        show this help list\n"
 "  target            target IP\n");
 }

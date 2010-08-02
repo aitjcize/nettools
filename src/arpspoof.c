@@ -352,5 +352,6 @@ void usage(void) {
 "  -r, --redifect    redirect IP, IP which we want to redirect packet to, if\n"
 "                    not spefified, local MAC is used\n"
 "  -v, --vebose      verbose mode\n"
+"  -h, --help        show this help list\n"
 "  host              the host you wish to intercept packets for\n");
 }
