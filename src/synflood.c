@@ -107,15 +107,11 @@ int main(int argc, char *argv[])
   slog_init(program_name, g_verbose_mode);
 
   /* check if use is root */
-  if (getuid() && geteuid()) {
-    fprintf(stderr, "%s: must run as root\n", program_name);
-    exit(1);
-  }
+  if (getuid() && geteuid())
+    slog(L_FATAL, 0, "must run as root\n");
 
-  if (!intf) {
-    fprintf(stderr, "%s: must specify interface\n", program_name);
-    exit(1);
-  }
+  if (!intf)
+    slog(L_FATAL, 0, "must specify interface\n");
 
   if (optind == argc)
     slog(L_FATAL, 0, "must specified host IP address\n");
@@ -242,7 +238,7 @@ void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
       program_name, program_version);
   fprintf(stderr, "Usage: %s [-v] [-i interface] [-r redirect] [-m mac] "
-                  "[-M IP] target",
+                  "[-M IP] target\n\n",
                   program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
