@@ -410,8 +410,8 @@ void slog(int level, const char *fmt, ...) {
 void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
       program_name, program_version);
-  fprintf(stderr, "Usage: %s [-v] [-i interface] [-t target] [-r redirect] "
-                  "[-m mac] [-M IP]                  target\n\n",
+  fprintf(stderr, "Usage: %s [-v] [-i interface] [-r redirect] [-m mac] "
+                  "[-M IP] target",
                   program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
