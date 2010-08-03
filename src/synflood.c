@@ -66,8 +66,7 @@ char* intf = NULL;                     /* interface */
 
 int main(int argc, char *argv[])
 {
-  char err_buf[LIBNET_ERRBUF_SIZE > PCAP_ERRBUF_SIZE?
-               LIBNET_ERRBUF_SIZE: PCAP_ERRBUF_SIZE];
+  char err_buf[LIBNET_ERRBUF_SIZE];
   int opt = 0;
   char* spf_mac_str = 0;
   char* spf_mac_of_ip_str = 0;
