@@ -236,8 +236,7 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
 void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
       program_name, program_version);
-  fprintf(stderr, "Usage: %s [-v] [-i interface] [-r redirect] [-m mac] "
-                  "[-M IP] target\n\n",
+  fprintf(stderr, "Usage: %s [-v] [-i interface] [-m mac] [-M IP] target\n\n",
                   program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
