@@ -1,0 +1,66 @@
+2010-08-07  AZ Huang <aitjcize@gmail.com>
+
+  * src/synflood.c: Fix bug
+
+2010-08-03  AZ Huang <aitjcize@gmail.com>
+
+  * src/synflood.c: remove pcap related code from synflood.c
+
+2010-08-02  AZ Huang <aitjcize@gmail.com>
+
+  * src/synflood.c: fix some message
+
+  * src/Makefile, src/arp_utils.c, src/arp_utils.h, src/arpspoof.c,
+  src/synflood.c, src/utils.c, src/utils.h: seperate interface
+
+  * src/synflood.c: fix minor bug
+
+  * src/arpspoof.c, src/synflood.c: fix help list
+
+2010-08-01  AZ Huang <aitjcize@gmail.com>
+
+  * src/synflood.c: minor format change
+
+  * src/Makefile, src/arpspoof.c, src/synflood.c: Add synflood.c
+
+  * src/Makefile, src/arpspoof.c: modify msg interface
+
+  * src/Makefile, src/arpspoof.c: add some error detection
+
+2010-07-31  AZ Huang <aitjcize@gmail.com>
+
+  * src/arpspoof.c: Increase version number: 0.2
+
+  * src/arpspoof.c: remove uneeded comments
+
+  * src/arpspoof.c: fix bug: use libnet_clear_packet to free previous packet
+  content
+
+  * src/arpspoof.c: add more output info
+
+  * src/Makefile, src/arpspoof.c: use pcap instead of arpcache lookup to get
+  MAC address.
+
+2010-07-30  AZ Huang <aitjcize@gmail.com>
+
+  * src/arpspoof.c: destroy libnet context before exiting
+
+2010-07-29  AZ Huang <aitjcize@gmail.com>
+
+  * src/arpspoof.c: Fix arp_request on other platform
+
+2010-07-28  AZ Huang <aitjcize@gmail.com>
+
+  * src/Makefile, src/arpspoof.c: Modify output message.
+
+  * src/arpspoof.c: Add compatibility to other platform (get_mac_by_ip)
+
+2010-07-27  AZ Huang <aitjcize@gmail.com>
+
+  * src/arpspoof.c: Remove uneeded messages.
+
+  * src/arpspoof.c: Add message when spoofing.
+
+  * src/Makefile: Add Makefile
+
+  * src/arpspoof.c: arpspoof Ver 0.1
