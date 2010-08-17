@@ -9,6 +9,9 @@
 /* Define to 1 if you have the `net' library (-lnet). */
 #undef HAVE_LIBNET
 
+/* Define to 1 if you have the <libnet.h> header file. */
+#undef HAVE_LIBNET_H
+
 /* Define to 1 if you have the `pcap' library (-lpcap). */
 #undef HAVE_LIBPCAP
 
@@ -21,6 +24,9 @@
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
+
+/* Define to 1 if you have the <pcap.h> header file. */
+#undef HAVE_PCAP_H
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H

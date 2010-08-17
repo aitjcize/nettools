@@ -16,7 +16,7 @@ AC_CHECK_LIB([net], [libnet_init],, AC_MSG_ERROR([You need libnet1 to build $PAC
 AC_CHECK_LIB([pcap], [pcap_open_live],, AC_MSG_ERROR([You need libpcap to build $PACKAGE]))
 
 # Checks for header files.
-AC_CHECK_HEADERS([arpa/inet.h netinet/in.h string.h unistd.h])
+AC_CHECK_HEADERS([arpa/inet.h netinet/in.h string.h unistd.h libnet.h pcap.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 
