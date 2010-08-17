@@ -45,18 +45,16 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_arpspoof_OBJECTS = arpspoof-arpspoof.$(OBJEXT) \
-	arpspoof-arp_utils.$(OBJEXT) arpspoof-utils.$(OBJEXT)
+am_arpspoof_OBJECTS = arpspoof.$(OBJEXT) arp_utils.$(OBJEXT) \
+	utils.$(OBJEXT)
 arpspoof_OBJECTS = $(am_arpspoof_OBJECTS)
+arpspoof_LDADD = $(LDADD)
 arpspoof_DEPENDENCIES =
-arpspoof_LINK = $(CCLD) $(arpspoof_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
-am_synflood_OBJECTS = synflood-synflood.$(OBJEXT) \
-	synflood-arp_utils.$(OBJEXT) synflood-utils.$(OBJEXT)
+am_synflood_OBJECTS = synflood.$(OBJEXT) arp_utils.$(OBJEXT) \
+	utils.$(OBJEXT)
 synflood_OBJECTS = $(am_synflood_OBJECTS)
+synflood_LDADD = $(LDADD)
 synflood_DEPENDENCIES =
-synflood_LINK = $(CCLD) $(synflood_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
-	$(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -156,16 +154,18 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-arpspoof_CFLAGS = -Wall -O2 -g
-arpspoof_LDADD = -lnet -lpcap
+LDADD = -lnet -lpcap
+AM_CFLAGS = -Wall -O2 -g
 arpspoof_SOURCES = arpspoof.c \
+		   arp_utils.h \
 		   arp_utils.c \
+		   utils.h \
 		   utils.c
 
-synflood_CFLAGS = -Wall -O2 -g
-synflood_LDADD = -lnet -lpcap
 synflood_SOURCES = synflood.c \
+		   arp_utils.h \
 		   arp_utils.c \
+		   utils.h \
 		   utils.c
 
 all: all-am
@@ -241,10 +241,10 @@ clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
 arpspoof$(EXEEXT): $(arpspoof_OBJECTS) $(arpspoof_DEPENDENCIES) 
 	@rm -f arpspoof$(EXEEXT)
-	$(arpspoof_LINK) $(arpspoof_OBJECTS) $(arpspoof_LDADD) $(LIBS)
+	$(LINK) $(arpspoof_OBJECTS) $(arpspoof_LDADD) $(LIBS)
 synflood$(EXEEXT): $(synflood_OBJECTS) $(synflood_DEPENDENCIES) 
 	@rm -f synflood$(EXEEXT)
-	$(synflood_LINK) $(synflood_OBJECTS) $(synflood_LDADD) $(LIBS)
+	$(LINK) $(synflood_OBJECTS) $(synflood_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -252,12 +252,10 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/arpspoof-arp_utils.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/arpspoof-arpspoof.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/arpspoof-utils.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/synflood-arp_utils.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/synflood-synflood.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/synflood-utils.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/arp_utils.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/arpspoof.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/synflood.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/utils.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -272,90 +270,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(COMPILE) -c `$(CYGPATH_W) '$<'`
-
-arpspoof-arpspoof.o: arpspoof.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-arpspoof.o -MD -MP -MF $(DEPDIR)/arpspoof-arpspoof.Tpo -c -o arpspoof-arpspoof.o `test -f 'arpspoof.c' || echo '$(srcdir)/'`arpspoof.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-arpspoof.Tpo $(DEPDIR)/arpspoof-arpspoof.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arpspoof.c' object='arpspoof-arpspoof.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-arpspoof.o `test -f 'arpspoof.c' || echo '$(srcdir)/'`arpspoof.c
-
-arpspoof-arpspoof.obj: arpspoof.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-arpspoof.obj -MD -MP -MF $(DEPDIR)/arpspoof-arpspoof.Tpo -c -o arpspoof-arpspoof.obj `if test -f 'arpspoof.c'; then $(CYGPATH_W) 'arpspoof.c'; else $(CYGPATH_W) '$(srcdir)/arpspoof.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-arpspoof.Tpo $(DEPDIR)/arpspoof-arpspoof.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arpspoof.c' object='arpspoof-arpspoof.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-arpspoof.obj `if test -f 'arpspoof.c'; then $(CYGPATH_W) 'arpspoof.c'; else $(CYGPATH_W) '$(srcdir)/arpspoof.c'; fi`
-
-arpspoof-arp_utils.o: arp_utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-arp_utils.o -MD -MP -MF $(DEPDIR)/arpspoof-arp_utils.Tpo -c -o arpspoof-arp_utils.o `test -f 'arp_utils.c' || echo '$(srcdir)/'`arp_utils.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-arp_utils.Tpo $(DEPDIR)/arpspoof-arp_utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arp_utils.c' object='arpspoof-arp_utils.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-arp_utils.o `test -f 'arp_utils.c' || echo '$(srcdir)/'`arp_utils.c
-
-arpspoof-arp_utils.obj: arp_utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-arp_utils.obj -MD -MP -MF $(DEPDIR)/arpspoof-arp_utils.Tpo -c -o arpspoof-arp_utils.obj `if test -f 'arp_utils.c'; then $(CYGPATH_W) 'arp_utils.c'; else $(CYGPATH_W) '$(srcdir)/arp_utils.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-arp_utils.Tpo $(DEPDIR)/arpspoof-arp_utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arp_utils.c' object='arpspoof-arp_utils.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-arp_utils.obj `if test -f 'arp_utils.c'; then $(CYGPATH_W) 'arp_utils.c'; else $(CYGPATH_W) '$(srcdir)/arp_utils.c'; fi`
-
-arpspoof-utils.o: utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-utils.o -MD -MP -MF $(DEPDIR)/arpspoof-utils.Tpo -c -o arpspoof-utils.o `test -f 'utils.c' || echo '$(srcdir)/'`utils.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-utils.Tpo $(DEPDIR)/arpspoof-utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils.c' object='arpspoof-utils.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-utils.o `test -f 'utils.c' || echo '$(srcdir)/'`utils.c
-
-arpspoof-utils.obj: utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -MT arpspoof-utils.obj -MD -MP -MF $(DEPDIR)/arpspoof-utils.Tpo -c -o arpspoof-utils.obj `if test -f 'utils.c'; then $(CYGPATH_W) 'utils.c'; else $(CYGPATH_W) '$(srcdir)/utils.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/arpspoof-utils.Tpo $(DEPDIR)/arpspoof-utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils.c' object='arpspoof-utils.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(arpspoof_CFLAGS) $(CFLAGS) -c -o arpspoof-utils.obj `if test -f 'utils.c'; then $(CYGPATH_W) 'utils.c'; else $(CYGPATH_W) '$(srcdir)/utils.c'; fi`
-
-synflood-synflood.o: synflood.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-synflood.o -MD -MP -MF $(DEPDIR)/synflood-synflood.Tpo -c -o synflood-synflood.o `test -f 'synflood.c' || echo '$(srcdir)/'`synflood.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-synflood.Tpo $(DEPDIR)/synflood-synflood.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='synflood.c' object='synflood-synflood.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-synflood.o `test -f 'synflood.c' || echo '$(srcdir)/'`synflood.c
-
-synflood-synflood.obj: synflood.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-synflood.obj -MD -MP -MF $(DEPDIR)/synflood-synflood.Tpo -c -o synflood-synflood.obj `if test -f 'synflood.c'; then $(CYGPATH_W) 'synflood.c'; else $(CYGPATH_W) '$(srcdir)/synflood.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-synflood.Tpo $(DEPDIR)/synflood-synflood.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='synflood.c' object='synflood-synflood.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-synflood.obj `if test -f 'synflood.c'; then $(CYGPATH_W) 'synflood.c'; else $(CYGPATH_W) '$(srcdir)/synflood.c'; fi`
-
-synflood-arp_utils.o: arp_utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-arp_utils.o -MD -MP -MF $(DEPDIR)/synflood-arp_utils.Tpo -c -o synflood-arp_utils.o `test -f 'arp_utils.c' || echo '$(srcdir)/'`arp_utils.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-arp_utils.Tpo $(DEPDIR)/synflood-arp_utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arp_utils.c' object='synflood-arp_utils.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-arp_utils.o `test -f 'arp_utils.c' || echo '$(srcdir)/'`arp_utils.c
-
-synflood-arp_utils.obj: arp_utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-arp_utils.obj -MD -MP -MF $(DEPDIR)/synflood-arp_utils.Tpo -c -o synflood-arp_utils.obj `if test -f 'arp_utils.c'; then $(CYGPATH_W) 'arp_utils.c'; else $(CYGPATH_W) '$(srcdir)/arp_utils.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-arp_utils.Tpo $(DEPDIR)/synflood-arp_utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='arp_utils.c' object='synflood-arp_utils.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-arp_utils.obj `if test -f 'arp_utils.c'; then $(CYGPATH_W) 'arp_utils.c'; else $(CYGPATH_W) '$(srcdir)/arp_utils.c'; fi`
-
-synflood-utils.o: utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-utils.o -MD -MP -MF $(DEPDIR)/synflood-utils.Tpo -c -o synflood-utils.o `test -f 'utils.c' || echo '$(srcdir)/'`utils.c
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-utils.Tpo $(DEPDIR)/synflood-utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils.c' object='synflood-utils.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-utils.o `test -f 'utils.c' || echo '$(srcdir)/'`utils.c
-
-synflood-utils.obj: utils.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -MT synflood-utils.obj -MD -MP -MF $(DEPDIR)/synflood-utils.Tpo -c -o synflood-utils.obj `if test -f 'utils.c'; then $(CYGPATH_W) 'utils.c'; else $(CYGPATH_W) '$(srcdir)/utils.c'; fi`
-@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/synflood-utils.Tpo $(DEPDIR)/synflood-utils.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils.c' object='synflood-utils.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(synflood_CFLAGS) $(CFLAGS) -c -o synflood-utils.obj `if test -f 'utils.c'; then $(CYGPATH_W) 'utils.c'; else $(CYGPATH_W) '$(srcdir)/utils.c'; fi`
 
 ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
 	list='$(SOURCES) $(HEADERS) $(LISP) $(TAGS_FILES)'; \
