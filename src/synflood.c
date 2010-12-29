@@ -236,10 +236,12 @@ void synflood(short* dp, int dp_count, u_int8_t* src_mac,
 void usage(void) {
   fprintf(stderr, "%s %s, by Wei-Ning Huang <aitjcize@gmail.com>\n",
       program_name, program_version);
-  fprintf(stderr, "Usage: %s [-v] [-i interface] [-m mac] [-M IP] target\n\n",
+  fprintf(stderr, "Usage: %s [-v] [-i interface] [-m mac] [-M IP] [-p ports] "
+          "target\n\n",
                   program_name);
   fprintf(stderr,
 "  -i, --interface   interface\n"
+"  -p, --dest-ports  target ports, seperated with ','\n"
 "  -m, --mac         use alternate MAC (for LAN only)\n"
 "  -M, --mac-of-ip   use alternate MAC of the ip IP (for LAN only)\n"
 "  -v, --vebose      verbose mode\n"
