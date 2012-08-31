@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
   char* redirect_ip_str  = NULL;         /* IP of MAC we want to redirect 
                                             packets to, if not specified,
                                             attacker's MAC is used */
+  srand(time(NULL));
 
   while ((opt = getopt_long(argc, argv, "i:n:t:r:hv", longopts, NULL)) != -1) {
     switch(opt) {
@@ -171,7 +172,11 @@ void start_spoof(int send_interval) {
       for (c = 0; c < 6; c++)
         slog(L_MSG, 0, "%.2x%c", ((u_char*)&red_mac)[c], (c < 5)? ':': '\n');
     }
-    usleep(send_interval);
+    if (!send_interval) {
+      usleep((rand() % 20) * 1000000);
+    } else {
+      usleep(send_interval);
+    }
   }
 }
 
